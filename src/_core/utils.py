@@ -31,13 +31,15 @@ def get_hash(content: str) -> str:
     return res
 
 
-def extract_arc_js(content:str):
+def extract_arc_js(content: str):
     from bs4 import BeautifulSoup
-    soup = BeautifulSoup(content, 'html.parser')
-    script_tags = soup.find_all('script')
-    tag=next(x for x in script_tags if "window.AR_SiteKey =" in x.text)
-    hash=tag.text.split("window.AR_SiteKey = '")[-1].split("';")[0]
+
+    soup = BeautifulSoup(content, "html.parser")
+    script_tags = soup.find_all("script")
+    tag = next(x for x in script_tags if "window.AR_SiteKey =" in x.text)
+    hash = tag.text.split("window.AR_SiteKey = '")[-1].split("';")[0]
     return hash
+
 
 def save_cookies(client, filepath):
     # Convert cookies to a dictionary
