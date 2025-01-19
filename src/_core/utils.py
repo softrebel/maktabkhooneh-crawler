@@ -115,17 +115,16 @@ def load_model_from_json(model_type: Type[T], filename: str) -> T:
         )
 
 
-def sanitize_filename(filename, replacement="_"):
-    """Replaces or removes characters that are not allowed in filenames."""
-    # Replace spaces with underscores.
-    filename = re.sub(r"\s+", replacement, filename)
+def sanitize_filename(filename, replacement='_'):
+    """Replaces or removes characters that are not allowed in filenames, while preserving UTF-8."""
+    # # Replace spaces with underscores.
+    # filename = re.sub(r'\s+', replacement, filename)
 
-    # Remove or replace problematic characters.
+     # Remove or replace problematic characters.
     filename = re.sub(r'[\\/:*?"<>|]', replacement, filename)
-    # Remove non-ASCII characters
-    filename = filename.encode("ascii", errors="ignore").decode()
+
     # remove leading and trailing underscores and points
-    filename = filename.strip("_").strip(".")
+    # filename = filename.strip('_').strip('.')
 
     # Limit to a maximum length for safety.
     max_length = 255  # Reasonable max for most file systems

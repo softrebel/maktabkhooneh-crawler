@@ -4,7 +4,7 @@ from src._core.utils import (
     load_cookies,
     get_hash,
     extract_arc_js,
-    sanitize_filename
+    sanitize_filename,
 )
 import logging
 from src._core.schemas import (
@@ -21,6 +21,7 @@ import lxml.html
 
 class MaktabkhoonehCrawler:
     name: str = "Maktabkhooneh"
+    BASE_URL: str = "https://maktabkhooneh.org"
     AUTH_API_URL: str = "https://maktabkhooneh.org/api/v1/auth"
     COURSE_API_URL: str = "https://maktabkhooneh.org/api/v1/courses"
 
@@ -222,6 +223,50 @@ class MaktabkhoonehCrawler:
         logging.info(f"Course info crawl finished for link: {link}")
         return output
 
+    def _download_subtitle(
+        self,
+        subtitle_url,
+        output_file,
+    ):
+        logging.info(f"Downloading subtitle: {subtitle_url}")
+        try:
+            head_response = self.client.head(subtitle_url)
+            head_response.raise_for_status()
+            file_size = int(
+                head_response.headers.get("content-length", 0)
+            )  # Total file size
+            if os.path.exists(output_file):
+                logging.info(f"File already exists: {output_file}")
+                # check size
+                if os.path.getsize(output_file) == file_size:
+                    logging.info(f"File already downloaded: {output_file}")
+                    return
+                else:
+                    logging.info(
+                        f"File already exists but size is different: {output_file}"
+                    )
+                    os.remove(output_file)
+            with self.client.stream("GET", subtitle_url) as response:
+                response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+                # Open the output file in write-binary mode
+                with tqdm(
+                    total=file_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc=f"Downloading {output_file}",
+                ) as progress_bar:
+                    with open(output_file, "wb") as file:
+                        # Iterate over the response content in chunks
+                        for chunk in response.iter_bytes(chunk_size=8192):
+                            file.write(chunk)
+                            progress_bar.update(len(chunk))
+            logging.info(f"Subtitle downloaded successfully to {output_file}")
+        except httpx.RequestError as e:
+            logging.info(f"An error occurred while requesting the subtitle: {e}")
+        except Exception as e:
+            logging.info(f"An error occurred: {e}")
+
     def _download_video(
         self,
         video_url: str,
@@ -271,6 +316,11 @@ class MaktabkhoonehCrawler:
         links = html.xpath("//source/attribute::src")
         return links
 
+    def _extract_video_subtitle(self, response_text: str) -> str | None:
+        html = lxml.html.fromstring(response_text)
+        subtitles = html.xpath('//track[@kind="subtitles"]/@src')
+        return next(iter(subtitles), None)
+
     def download_course_videos(self, course_info: CourseInfo, max_threads: int = 1):
         # To download videos in parallel, we can use the ThreadPoolExecutor class from the concurrent.futures module.
 
@@ -288,7 +338,9 @@ class MaktabkhoonehCrawler:
             chapter_slug = chapter.slug
             chapter_id = chapter.id
 
-            chapter_directory = f"{course_directory}{os.sep}{i + 1}_{sanitize_filename(chapter_title)}"
+            chapter_directory = (
+                f"{course_directory}{os.sep}{i + 1}_{sanitize_filename(chapter_title)}"
+            )
             if not os.path.exists(chapter_directory):
                 logging.info(f"Creating chapter directory: {chapter_directory}")
                 os.makedirs(chapter_directory)
@@ -306,14 +358,25 @@ class MaktabkhoonehCrawler:
                     )
                     continue
 
-                unit_video_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.mp4"
-
                 unit_url = f"{course_link}{chapter_url}/{unit_slug}/"
                 logging.info(f"Get Page unit: {unit_url}")
                 response = self.request(url=unit_url)
                 response.raise_for_status()
                 response_text = response.text
 
+                logging.info("Extracting video subtitle")
+                video_subtitle = self._extract_video_subtitle(response_text)
+                if video_subtitle:
+                    subtitle_url = f"{self.BASE_URL}{video_subtitle}"
+                    unit_subtitle_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.vtt"
+                    self._download_subtitle(
+                        subtitle_url=subtitle_url,
+                        output_file=unit_subtitle_path,
+                    )
+                else:
+                    logging.info("No subtitle found")
+
+                unit_video_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.mp4"
                 logging.info("Extracting video links")
                 video_links = self._extract_video_link(response_text)
                 logging.info(f"Found {len(video_links)} video links")
