@@ -347,53 +347,57 @@ class MaktabkhoonehCrawler:
             chapter_url = f"{chapter_slug}-ch{chapter_id}"
             chpater_units = chapter.unit_set
             for j, unit in enumerate(chpater_units):
-                logging.info(f"Processing unit: {unit.title}")
-                unit_title = unit.title
-                unit_slug = unit.slug
-                unit_type = unit.type
-
-                if unit_type != "lecture":
-                    logging.info(
-                        f"Skipping unit: {unit_title} as it is not a lecture: {unit_type}"
-                    )
-                    continue
-
-                unit_url = f"{course_link}{chapter_url}/{unit_slug}/"
-                logging.info(f"Get Page unit: {unit_url}")
-                response = self.request(url=unit_url)
-                response.raise_for_status()
-                response_text = response.text
-
-                logging.info("Extracting video subtitle")
-                video_subtitle = self._extract_video_subtitle(response_text)
-                if video_subtitle:
-                    subtitle_url = f"{self.BASE_URL}{video_subtitle}"
-                    unit_subtitle_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.vtt"
-                    self._download_subtitle(
-                        subtitle_url=subtitle_url,
-                        output_file=unit_subtitle_path,
-                    )
-                else:
-                    logging.info("No subtitle found")
-
-                unit_video_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.mp4"
-                logging.info("Extracting video links")
-                video_links = self._extract_video_link(response_text)
-                logging.info(f"Found {len(video_links)} video links")
-
                 try:
-                    logging.info("Trying to get hq video link")
-                    video_url = next((x for x in video_links if "hq" in x))
-                except Exception as e:
-                    logging.error(f"error: {e}")
-                    logging.error(video_links)
-                    video_url = video_links[0]
+                    logging.info(f"Processing unit: {unit.title}")
+                    unit_title = unit.title
+                    unit_slug = unit.slug
+                    unit_type = unit.type
 
-                logging.info(f"Downloading video: {video_url}")
-                self._download_video(
-                    video_url=video_url,
-                    output_file=unit_video_path,
-                )
+                    if unit_type != "lecture":
+                        logging.info(
+                            f"Skipping unit: {unit_title} as it is not a lecture: {unit_type}"
+                        )
+                        continue
+
+                    unit_url = f"{course_link}{chapter_url}/{unit_slug}/"
+                    logging.info(f"Get Page unit: {unit_url}")
+                    response = self.request(url=unit_url)
+                    response.raise_for_status()
+                    response_text = response.text
+
+                    logging.info("Extracting video subtitle")
+                    video_subtitle = self._extract_video_subtitle(response_text)
+                    if video_subtitle:
+                        subtitle_url = f"{self.BASE_URL}{video_subtitle}"
+                        unit_subtitle_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.vtt"
+                        self._download_subtitle(
+                            subtitle_url=subtitle_url,
+                            output_file=unit_subtitle_path,
+                        )
+                    else:
+                        logging.info("No subtitle found")
+
+                    unit_video_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.mp4"
+                    logging.info("Extracting video links")
+                    video_links = self._extract_video_link(response_text)
+                    logging.info(f"Found {len(video_links)} video links")
+
+                    try:
+                        logging.info("Trying to get hq video link")
+                        video_url = next((x for x in video_links if "hq" in x))
+                    except Exception as e:
+                        logging.error(f"error: {e}")
+                        logging.error(video_links)
+                        video_url = video_links[0]
+
+                    logging.info(f"Downloading video: {video_url}")
+                    self._download_video(
+                        video_url=video_url,
+                        output_file=unit_video_path,
+                    )
+                except Exception as e:
+                    logging.error(f"Error in unit: {unit_title}")
+                    logging.error(e)
 
     def __del__(self):
         del self

@@ -207,9 +207,9 @@ class CourseModel(BaseModel):
     extra_description: str
     content_grouping: ContentGrouping
     course_effort_time: str
-    required_hours: int
-    content_hours: int
-    project_hours: int
+    required_hours: int | str
+    content_hours: int | str
+    project_hours: int | str
     purchase_expire_duration: int
     validation_threshold: float
     required_projects: bool
