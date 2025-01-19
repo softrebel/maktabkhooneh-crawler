@@ -25,18 +25,18 @@ class MaktabkhoonehCrawler:
 
     def __init__(
         self,
-        username: str,
-        password: str,
+        username: str | None,
+        password: str | None,
         client: httpx.Client | None = None,
         headers: dict | None = None,
         cookies_file: str | None = None,
-        save_path: str = "data",
+        save_path: str = "temp",
         proxy: str | None = None,
         *args,
         **kwargs,
     ):
-        self.username: str = username
-        self.password: str = password
+        self.username: str | None = username
+        self.password: str | None = password
         self.user_info: UserInfo | None = None
         self._client: httpx.Client | None = client
         self.headers: dict | None = headers or {
@@ -62,6 +62,9 @@ class MaktabkhoonehCrawler:
         self.paginator_xpath = '//div[@class="paginator"]/ul/li[last()-1]/a/text()'  # xpath to get the last page number
 
         self.save_path = save_path
+        if os.path.exists(self.save_path) is False:
+            os.makedirs(self.save_path)
+
         self._crawled_links: list[str] = []
 
         self.proxy = proxy
@@ -148,7 +151,7 @@ class MaktabkhoonehCrawler:
 
     # other methods and attributes
 
-    def login(self) -> UserInfo | None:
+    def login(self, force_save_cookies: bool = True) -> UserInfo | None:
         url = f"{self.AUTH_API_URL}/check-active-user"
         payload = {"tessera": self.username, "g-recaptcha-response": "recaptcha-token"}
         response = self.client.request("POST", url, headers=self.headers, data=payload)
@@ -187,7 +190,8 @@ class MaktabkhoonehCrawler:
             case _:
                 logging.error(f"Error on login with password: {response.text}")
                 raise Exception(res.message)
-        save_cookies(self.client, self.cookies_file)
+        if force_save_cookies:
+            save_cookies(self.client, self.cookies_file)
         return self.user_info
 
     def _crawl_course(self, course_name: str) -> CourseModel:
@@ -266,7 +270,9 @@ class MaktabkhoonehCrawler:
         links = html.xpath("//source/attribute::src")
         return links
 
-    def download_course_videos(self, course_info: CourseInfo):
+    def download_course_videos(self, course_info: CourseInfo, max_threads: int):
+        # To download videos in parallel, we can use the ThreadPoolExecutor class from the concurrent.futures module.
+
         course_link = course_info.link
         course_title = course_info.course.title
         chapters = course_info.chapters.chapters

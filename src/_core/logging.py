@@ -17,6 +17,10 @@ def setup_logging(log_file="app.log", log_level=logging.INFO):
     if log_dir and not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
+    # Configure httpx logging to avoid spamming logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
     # Set up the logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
@@ -35,8 +39,7 @@ def setup_logging(log_file="app.log", log_level=logging.INFO):
 
     # File Handler with rotation
     file_handler = RotatingFileHandler(
-        log_file, maxBytes=5 * 1024 * 1024, backupCount=5,
-        encoding = "UTF-8"
+        log_file, maxBytes=5 * 1024 * 1024, backupCount=5, encoding="UTF-8"
     )
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)

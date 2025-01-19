@@ -188,7 +188,7 @@ class Label(BaseModel):
 
 
 class Labels(BaseModel):
-    main: Label
+    main: Optional[Label]
     business: Optional[Label] = None
 
 
@@ -246,7 +246,7 @@ class CourseModel(BaseModel):
     course_progress: Optional[Any] = None
     teachers: List[Teacher]
     course_features: List[CourseFeature]
-    related_courses: Dict
+    related_courses: Dict | list
     is_business_course: bool
     meta_data: MetaData
     learning_goals: List[str]
