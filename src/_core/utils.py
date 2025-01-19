@@ -6,7 +6,7 @@ from pydantic import BaseModel
 import json
 from typing import Type, TypeVar
 from pydantic import ValidationError
-
+import re
 
 
 CDN_REGEX: str = r"<\/script><script type=\"text\/javascript\">(var.+\n)"
@@ -79,9 +79,8 @@ def save_model_to_json(model: BaseModel, filename: str, indent: int = 4) -> None
         f.write(json_string)
 
 
-
-
 T = TypeVar("T", bound=BaseModel)
+
 
 def load_model_from_json(model_type: Type[T], filename: str) -> T:
     """Loads a Pydantic model from a JSON file.
@@ -107,6 +106,27 @@ def load_model_from_json(model_type: Type[T], filename: str) -> T:
     except FileNotFoundError:
         raise FileNotFoundError(f"JSON file not found: {filename}")
     except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(f"Invalid JSON format in {filename}: {e.msg}", e.doc, e.pos)
+        raise json.JSONDecodeError(
+            f"Invalid JSON format in {filename}: {e.msg}", e.doc, e.pos
+        )
     except ValidationError as e:
-        raise ValidationError(f"JSON data does not match the model: {e}", model=model_type)
+        raise ValidationError(
+            f"JSON data does not match the model: {e}", model=model_type
+        )
+
+
+def sanitize_filename(filename, replacement="_"):
+    """Replaces or removes characters that are not allowed in filenames."""
+    # Replace spaces with underscores.
+    filename = re.sub(r"\s+", replacement, filename)
+
+    # Remove or replace problematic characters.
+    filename = re.sub(r'[\\/:*?"<>|]', replacement, filename)
+    # Remove non-ASCII characters
+    filename = filename.encode("ascii", errors="ignore").decode()
+    # remove leading and trailing underscores and points
+    filename = filename.strip("_").strip(".")
+
+    # Limit to a maximum length for safety.
+    max_length = 255  # Reasonable max for most file systems
+    return filename[:max_length]

@@ -4,6 +4,7 @@ from src._core.utils import (
     load_cookies,
     get_hash,
     extract_arc_js,
+    sanitize_filename
 )
 import logging
 from src._core.schemas import (
@@ -270,13 +271,13 @@ class MaktabkhoonehCrawler:
         links = html.xpath("//source/attribute::src")
         return links
 
-    def download_course_videos(self, course_info: CourseInfo, max_threads: int):
+    def download_course_videos(self, course_info: CourseInfo, max_threads: int = 1):
         # To download videos in parallel, we can use the ThreadPoolExecutor class from the concurrent.futures module.
 
         course_link = course_info.link
         course_title = course_info.course.title
         chapters = course_info.chapters.chapters
-        course_directory = f"{self.save_path}/{course_title}"
+        course_directory = f"{self.save_path}{os.sep}{sanitize_filename(course_title)}"
         if not os.path.exists(course_directory):
             logging.info(f"Creating course directory: {course_directory}")
             os.makedirs(course_directory)
@@ -287,7 +288,7 @@ class MaktabkhoonehCrawler:
             chapter_slug = chapter.slug
             chapter_id = chapter.id
 
-            chapter_directory = f"{course_directory}/{i + 1}_{chapter_title}"
+            chapter_directory = f"{course_directory}{os.sep}{i + 1}_{sanitize_filename(chapter_title)}"
             if not os.path.exists(chapter_directory):
                 logging.info(f"Creating chapter directory: {chapter_directory}")
                 os.makedirs(chapter_directory)
@@ -305,7 +306,7 @@ class MaktabkhoonehCrawler:
                     )
                     continue
 
-                unit_video_path = f"{chapter_directory}/{j + 1}_{unit_title}.mp4"
+                unit_video_path = f"{chapter_directory}{os.sep}{j + 1}_{sanitize_filename(unit_title)}.mp4"
 
                 unit_url = f"{course_link}{chapter_url}/{unit_slug}/"
                 logging.info(f"Get Page unit: {unit_url}")
