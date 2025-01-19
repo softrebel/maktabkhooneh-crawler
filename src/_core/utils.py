@@ -1,9 +1,13 @@
 import pickle
-import lxml.html
 from lxml.html import Element
 import re
-import execjs
 import httpx
+from pydantic import BaseModel
+import json
+from typing import Type, TypeVar
+from pydantic import ValidationError
+
+
 
 CDN_REGEX: str = r"<\/script><script type=\"text\/javascript\">(var.+\n)"
 
@@ -23,9 +27,6 @@ def get_hash(content: str) -> str:
     if len(matches) == 0:
         return None
     js = matches[0]
-
-    # js_code = f"{js}\n{func}"
-    # res = execjs.exec_(js_code)
     response = send_hash(js)
     res = response["hash"]
     return res
@@ -68,3 +69,44 @@ def get_xpath_first_element(node: Element, xpath: str) -> str | None:
 
 def remove_extra_spaces(text: str) -> str:
     return " ".join(text.split())
+
+
+def save_model_to_json(model: BaseModel, filename: str, indent: int = 4) -> None:
+    """Saves a Pydantic model to a JSON file with UTF-8 encoding and indentation."""
+    with open(filename, "w", encoding="utf-8") as f:
+        # Option 1: Directly use the model's json() method with indent
+        json_string = model.model_dump_json(indent=indent)
+        f.write(json_string)
+
+
+
+
+T = TypeVar("T", bound=BaseModel)
+
+def load_model_from_json(model_type: Type[T], filename: str) -> T:
+    """Loads a Pydantic model from a JSON file.
+
+    Args:
+        model_type: The Pydantic model class (e.g., MyModel).
+        filename: The path to the JSON file.
+
+    Returns:
+        An instance of the Pydantic model if loading is successful.
+
+    Raises:
+        FileNotFoundError: If the JSON file does not exist.
+        json.JSONDecodeError: If the JSON file is not valid JSON.
+        ValidationError: If the JSON data doesn't match the model.
+    """
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            model_instance = model_type(**json_data)
+            return model_instance
+
+    except FileNotFoundError:
+        raise FileNotFoundError(f"JSON file not found: {filename}")
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(f"Invalid JSON format in {filename}: {e.msg}", e.doc, e.pos)
+    except ValidationError as e:
+        raise ValidationError(f"JSON data does not match the model: {e}", model=model_type)

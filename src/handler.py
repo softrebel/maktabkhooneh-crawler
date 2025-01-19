@@ -6,7 +6,16 @@ from src._core.utils import (
     extract_arc_js,
 )
 import logging
-from src._core.schemas import LoginResponse, UserInfo
+from src._core.schemas import (
+    LoginResponse,
+    UserInfo,
+    CourseModel,
+    CourseChaptersModel,
+    CourseInfo,
+)
+from tqdm import tqdm
+import os
+import lxml.html
 
 
 class MaktabkhoonehCrawler:
@@ -180,6 +189,141 @@ class MaktabkhoonehCrawler:
                 raise Exception(res.message)
         save_cookies(self.client, self.cookies_file)
         return self.user_info
+
+    def _crawl_course(self, course_name: str) -> CourseModel:
+        logging.info(f"Crawling course info: {course_name}")
+        url = f"{self.COURSE_API_URL}/{course_name}"
+        response = self.request_with_bypass_cdn(url=url)
+        response.raise_for_status()
+        output = CourseModel(**response.json())
+        return output
+
+    def _crawl_course_chapters(self, course_name: str) -> CourseChaptersModel:
+        logging.info(f"Crawling course chapters: {course_name}")
+
+        url = f"{self.COURSE_API_URL}/{course_name}chapters/"
+        response = self.request_with_bypass_cdn(url=url)
+        response.raise_for_status()
+        output = CourseChaptersModel(**response.json())
+        return output
+
+    def crawl_course_link(self, link: str) -> CourseInfo:
+        logging.info(f"Course info crawl started for link: {link}")
+        logging.info(f"Extract Course name from link: {link}")
+        course_name = link.split("course/")[-1]
+        course = self._crawl_course(course_name)
+        chapters = self._crawl_course_chapters(course_name)
+        output = CourseInfo(link=link, course=course, chapters=chapters)
+        logging.info(f"Course info crawl finished for link: {link}")
+        return output
+
+    def _download_video(
+        self,
+        video_url: str,
+        output_file: str,
+    ):
+        logging.info(f"Downloading video: {video_url}")
+        try:
+            head_response = self.client.head(video_url)
+            head_response.raise_for_status()
+            file_size = int(
+                head_response.headers.get("content-length", 0)
+            )  # Total file size
+            if os.path.exists(output_file):
+                logging.info(f"File already exists: {output_file}")
+                # check size
+                if os.path.getsize(output_file) == file_size:
+                    logging.info(f"File already downloaded: {output_file}")
+                    return
+                else:
+                    logging.info(
+                        f"File already exists but size is different: {output_file}"
+                    )
+                    os.remove(output_file)
+            with self.client.stream("GET", video_url) as response:
+                response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+                # Open the output file in write-binary mode
+                with tqdm(
+                    total=file_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc=f"Downloading {output_file}",
+                ) as progress_bar:
+                    with open(output_file, "wb") as file:
+                        # Iterate over the response content in chunks
+                        for chunk in response.iter_bytes(chunk_size=8192):
+                            file.write(chunk)
+                            progress_bar.update(len(chunk))
+            logging.info(f"Video downloaded successfully to {output_file}")
+        except httpx.RequestError as e:
+            logging.info(f"An error occurred while requesting the video: {e}")
+        except Exception as e:
+            logging.info(f"An error occurred: {e}")
+
+    def _extract_video_link(self, response_text: str) -> list[str]:
+        html = lxml.html.fromstring(response_text)
+        links = html.xpath("//source/attribute::src")
+        return links
+
+    def download_course_videos(self, course_info: CourseInfo):
+        course_link = course_info.link
+        course_title = course_info.course.title
+        chapters = course_info.chapters.chapters
+        course_directory = f"{self.save_path}/{course_title}"
+        if not os.path.exists(course_directory):
+            logging.info(f"Creating course directory: {course_directory}")
+            os.makedirs(course_directory)
+
+        for i, chapter in enumerate(chapters):
+            logging.info(f"Processing chapter: {chapter.title}")
+            chapter_title = chapter.title
+            chapter_slug = chapter.slug
+            chapter_id = chapter.id
+
+            chapter_directory = f"{course_directory}/{i + 1}_{chapter_title}"
+            if not os.path.exists(chapter_directory):
+                logging.info(f"Creating chapter directory: {chapter_directory}")
+                os.makedirs(chapter_directory)
+            chapter_url = f"{chapter_slug}-ch{chapter_id}"
+            chpater_units = chapter.unit_set
+            for j, unit in enumerate(chpater_units):
+                logging.info(f"Processing unit: {unit.title}")
+                unit_title = unit.title
+                unit_slug = unit.slug
+                unit_type = unit.type
+
+                if unit_type != "lecture":
+                    logging.info(
+                        f"Skipping unit: {unit_title} as it is not a lecture: {unit_type}"
+                    )
+                    continue
+
+                unit_video_path = f"{chapter_directory}/{j + 1}_{unit_title}.mp4"
+
+                unit_url = f"{course_link}{chapter_url}/{unit_slug}/"
+                logging.info(f"Get Page unit: {unit_url}")
+                response = self.request(url=unit_url)
+                response.raise_for_status()
+                response_text = response.text
+
+                logging.info("Extracting video links")
+                video_links = self._extract_video_link(response_text)
+                logging.info(f"Found {len(video_links)} video links")
+
+                try:
+                    logging.info("Trying to get hq video link")
+                    video_url = next((x for x in video_links if "hq" in x))
+                except Exception as e:
+                    logging.error(f"error: {e}")
+                    logging.error(video_links)
+                    video_url = video_links[0]
+
+                logging.info(f"Downloading video: {video_url}")
+                self._download_video(
+                    video_url=video_url,
+                    output_file=unit_video_path,
+                )
 
     def __del__(self):
         del self
