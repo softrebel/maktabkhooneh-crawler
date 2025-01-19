@@ -58,7 +58,7 @@ def login(save_cookies: bool, output: str):
     default=f"{project_configs.TEMP_PATH}",
     help="Path to the output directory",
 )
-def crawl_course(course_url: str, output: str):
+def crawl(course_url: str, output: str):
     """Crawl and save course info to a json file based on course url"""
     crawler = MaktabkhoonehCrawler(
         username=project_configs.MAKTABKHOONEH_USERNAME,
@@ -101,7 +101,7 @@ def crawl_course(course_url: str, output: str):
     default=f"{project_configs.TEMP_PATH}",
     help="Path to the output directory",
 )
-def download_videos(input_file: str, max_threads: int, output: str):
+def download(input_file: str, max_threads: int, output: str):
     """Loads course information from a JSON file and downloads videos for that course."""
     try:
         crawler = MaktabkhoonehCrawler(
